@@ -1363,7 +1363,7 @@ Scenario: Accesibilidad
 
 **Pull Request 1**
 
-**`feature/entrega-1-GFAM` → `main` · Entrega 1: documentación técnica**
+**`MemoAlvarez86:feature/entrega-1-GFAM` → `LIDR-academy/AI4Devs-finalproject:main` · Entrega 1: documentación técnica**
 
 - **Qué incluye:** ficha del proyecto, descripción del producto y alcance del MVP (MoSCoW), arquitectura (Mermaid + C4 en Structurizr DSL + 4 ADR en MADR), modelo de datos (ER con PK/FK/UK), OpenAPI de los endpoints HTTP, 7 historias de usuario AI-ready, desglose de tickets con estimación Fibonacci y buffer del 30 %, `prompts.md` con el registro del uso de IA y `llms.txt`.
 - **Cómo se construyó:** Claude Code (Claude Opus 5.5) leyó la constitución del proyecto (`docs/`, `openspec/`, `db/`, `tests/`), redactó el borrador y verificó cada dato contra el código (mensajes de error, nombres de SP, índices). El autor decidió el alcance del MVP y revisó el resultado.
