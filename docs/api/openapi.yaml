@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: JFH School — Endpoints HTTP de la intranet
+  version: 1.0.0
+  description: |
+    La intranet de JFH School es Blazor Interactive Server: las pantallas invocan en proceso los
+    servicios de aplicación (no hay API REST para el flujo principal). La superficie HTTP expuesta
+    son Minimal APIs de descarga y carga de archivos, definidas en
+    `Infrastructure/Endpoints/ReportesEndpoints.cs` y `Infrastructure/Endpoints/AlumnoFotoEndpoints.cs`.
+
+    **Autenticación:** cookie de ASP.NET Core Identity (`JFHSchool.Auth`).
+    **Autorización:** cada operación exige la policy RBAC `Permiso:{modulo}:{accion}`, evaluada contra
+    la matriz `seg.Permiso` (un rol con `EsAdmin = 1` tiene acceso total).
+  contact:
+    name: Guillermo Alvarez
+servers:
+  - url: https://jfhschool.com
+    description: Producción
+  - url: https://test.jfhschool.com
+    description: Staging
+  - url: http://localhost:5058
+    description: Desarrollo local
+security:
+  - cookieAuth: []
+tags:
+  - name: Reportes
+    description: Exportaciones Excel (ClosedXML) y PDF (QuestPDF). Permiso `reportes:Ver`.
+  - name: Alumnos
+    description: Fotografía del expediente, guardada fuera de `wwwroot`.
+paths:
+  /intranet/reportes/export/deudores:
+    get:
+      tags: [Reportes]
+      summary: Exportar deudores (cargos vencidos con saldo) a Excel
+      operationId: exportarDeudores
+      x-permiso: reportes:Ver
+      parameters:
+        - { $ref: '#/components/parameters/CicloEscolarId' }
+        - { name: seccionId, in: query, schema: { type: integer } }
+        - { name: grupoId, in: query, schema: { type: integer } }
+        - { name: busqueda, in: query, description: Nombre, matrícula o CURP, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Excel' }
+        '400': { $ref: '#/components/responses/ErrorNegocio' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+  /intranet/reportes/export/pagos:
+    get:
+      tags: [Reportes]
+      summary: Exportar pagos por periodo a Excel
+      operationId: exportarPagos
+      x-permiso: reportes:Ver
+      parameters:
+        - { name: desde, in: query, schema: { type: string, format: date } }
+        - { name: hasta, in: query, schema: { type: string, format: date } }
+        - name: metodoPagoTipoId
+          in: query
+          description: 1 Efectivo, 2 Transferencia, 3 Tarjeta, 4 Otro
+          schema: { type: integer, enum: [1, 2, 3, 4] }
+        - { $ref: '#/components/parameters/CicloEscolarId' }
+      responses:
+        '200': { $ref: '#/components/responses/Excel' }
+        '400': { $ref: '#/components/responses/ErrorNegocio' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+  /intranet/reportes/export/becados:
+    get:
+      tags: [Reportes]
+      summary: Exportar alumnos con beca o descuento a Excel
+      operationId: exportarBecados
+      x-permiso: reportes:Ver
+      parameters:
+        - { $ref: '#/components/parameters/CicloEscolarId' }
+        - name: beneficioTipoId
+          in: query
+          description: 1 Beca, 2 DescuentoPorcentaje, 3 DescuentoMontoFijo
+          schema: { type: integer, enum: [1, 2, 3] }
+        - { name: busqueda, in: query, schema: { type: string } }
+        - { name: soloVigentes, in: query, schema: { type: boolean, default: true } }
+      responses:
+        '200': { $ref: '#/components/responses/Excel' }
+        '400': { $ref: '#/components/responses/ErrorNegocio' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+  /intranet/reportes/export/estado-cuenta/{alumnoId}:
+    get:
+      tags: [Reportes]
+      summary: Exportar el estado de cuenta de un alumno (PDF o Excel)
+      operationId: exportarEstadoCuenta
+      x-permiso: reportes:Ver
+      parameters:
+        - { $ref: '#/components/parameters/AlumnoId' }
+        - { $ref: '#/components/parameters/CicloEscolarId' }
+        - name: format
+          in: query
+          schema: { type: string, enum: [pdf, xlsx], default: xlsx }
+      responses:
+        '200':
+          description: estado_cuenta_{alumnoId}_{yyyyMMdd}.pdf|.xlsx
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '400':
+          description: Regla de negocio incumplida
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: "No hay cargos para el alumno y ciclo seleccionados." }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+  /intranet/alumnos/{alumnoId}/foto:
+    get:
+      tags: [Alumnos]
+      summary: Obtener la fotografía del alumno
+      operationId: obtenerFoto
+      x-permiso: alumnos:Ver
+      parameters:
+        - { $ref: '#/components/parameters/AlumnoId' }
+      responses:
+        '200':
+          description: Imagen (admite rangos)
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { description: El alumno no tiene fotografía o no existe }
+    post:
+      tags: [Alumnos]
+      summary: Subir o reemplazar la fotografía del alumno
+      operationId: subirFoto
+      x-permiso: alumnos:Editar
+      description: Solo JPG/PNG de hasta 2 MB (`AppSettings`). Se guarda en `uploads/alumnos/{alumnoId}/`.
+      parameters:
+        - { $ref: '#/components/parameters/AlumnoId' }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [foto]
+              properties:
+                foto: { type: string, format: binary }
+      responses:
+        '200':
+          description: Fotografía guardada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, example: /intranet/alumnos/42/foto }
+        '400':
+          description: Archivo inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                tamano: { value: { error: "La imagen supera el límite de 2 MB." } }
+                tipo: { value: { error: "Solo se admiten imágenes JPG o PNG." } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+    delete:
+      tags: [Alumnos]
+      summary: Eliminar la fotografía del alumno
+      operationId: eliminarFoto
+      x-permiso: alumnos:Editar
+      parameters:
+        - { $ref: '#/components/parameters/AlumnoId' }
+      responses:
+        '204': { description: Fotografía eliminada }
+        '400': { $ref: '#/components/responses/ErrorNegocio' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: JFHSchool.Auth
+  parameters:
+    AlumnoId:
+      name: alumnoId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    CicloEscolarId:
+      name: cicloEscolarId
+      in: query
+      description: Si se omite, el servicio usa el ciclo con estatus Vigente cuando aplica
+      schema: { type: integer }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string, description: Mensaje de negocio en español }
+  responses:
+    Excel:
+      description: Archivo Excel generado con ClosedXML
+      content:
+        application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+          schema: { type: string, format: binary }
+    ErrorNegocio:
+      description: Regla de negocio incumplida
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: "No hay datos para exportar." }
+    NoAutenticado:
+      description: Sin sesión válida; el middleware de Identity redirige a /Account/Login
+    SinPermiso:
+      description: El rol del usuario no tiene el permiso requerido (policy Permiso:{modulo}:{accion})

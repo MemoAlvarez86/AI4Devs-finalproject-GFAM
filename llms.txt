@@ -1,0 +1,36 @@
+# JFH School
+
+> ERP web de administración escolar y cobranza para el colegio Jean Frederic Herbart (Preescolar y Primaria, Guadalajara, México). Monolito modular en ASP.NET Core 10 + Blazor Web App (Static SSR en el sitio público, Interactive Server en la intranet) sobre SQL Server. Todo el dominio y la UI están en español.
+
+## Stack técnico
+
+- Backend/UI: .NET 10, ASP.NET Core 10, Blazor Web App, EF Core 10 (DbContextFactory)
+- Base de datos: SQL Server, scripts-first (`db/`), escrituras de negocio por procedimientos almacenados (`cob.spGenerarCargo`, `cob.spInsertarPago`)
+- Seguridad: ASP.NET Core Identity (clave int, esquemas `seg`/`asp`), RBAC dinámico `Permiso:{modulo}:{accion}`
+- Librerías: ClosedXML (Excel), QuestPDF (PDF), MailKit (SMTP), Serilog
+- Pruebas: xUnit + FluentAssertions
+
+## Documentación principal
+
+- [Readme de la entrega](readme.md): producto, arquitectura, modelo de datos, API, historias y tickets
+- [Registro del uso de IA](prompts.md): herramientas, modelos, MCP, reglas, skills, prompts e intervención humana
+- [Historias de usuario](docs/backlog/historias-de-usuario.md): 5 must-have + 2 should-have, criterios Given/When/Then
+- [Tickets](docs/backlog/tickets.md): desglose, DoD por tipo y plan de Entregas 2–3
+- [ADRs](docs/adr/README.md): decisiones de arquitectura (MADR)
+- [Modelo C4](docs/architecture/workspace.dsl): Structurizr DSL
+- [OpenAPI](docs/api/openapi.yaml): endpoints HTTP (exportaciones y fotografías)
+
+## Reglas de negocio clave
+
+- Monto de un cargo: fijo, o variable por fecha (primer escalón con FechaCorte >= fecha; si la fecha pasa todos los cortes, se aplica el último escalón = recargo)
+- Beneficio: un activo por (alumno, ciclo, concepto); el específico gana al general; beca 100 % => MontoFinal 0 y estatus Pagado
+- Generación de cargos idempotente por (alumno, concepto, ciclo, periodo)
+- Un pago se distribuye en varios cargos; Saldo = MontoFinal − suma de lo aplicado
+- Soft-delete global con `EsEliminado`; 6 campos de auditoría en toda tabla; hora local de México (`Reloj.Ahora`, `dbo.fnAhora()`)
+
+## Invariantes para agentes
+
+- La UI nunca usa `ApplicationDbContext`; solo inyecta servicios de `Application/Services`
+- Los servicios heredan de `ServicioBase` y devuelven `Resultado`/`Resultado<T>`
+- Los cambios que cruzan capas usan OpenSpec (`/opsx-propose` → `/opsx-apply` → `/opsx-archive`)
+- La documentación (diccionario, EstructuraProyecto, roadmap) es parte del mismo cambio
